@@ -1,0 +1,50 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch x-ui panel packages
+        run: |
+          curl -fsSL --retry 3 -o x-ui-linux-amd64.tar.gz https://github.com/yonggekkk/x-ui-yg/releases/download/xui_yg/x-ui-linux-amd64.tar.gz
+          curl -fsSL --retry 3 -o x-ui-linux-arm64.tar.gz https://github.com/yonggekkk/x-ui-yg/releases/download/xui_yg/x-ui-linux-arm64.tar.gz
+          ls -lh x-ui-linux-*.tar.gz
+
+      - name: Fetch warp-plus binaries
+        run: |
+          curl -fsSL --retry 3 -o wp-amd64.zip https://github.com/bepass-org/warp-plus/releases/latest/download/warp-plus_linux-amd64.zip
+          curl -fsSL --retry 3 -o wp-arm64.zip https://github.com/bepass-org/warp-plus/releases/latest/download/warp-plus_linux-arm64.zip
+          unzip -o wp-amd64.zip -d wp-amd64
+          unzip -o wp-arm64.zip -d wp-arm64
+          mv wp-amd64/warp-plus xuiwpph_amd64
+          mv wp-arm64/warp-plus xuiwpph_arm64
+          chmod +x xuiwpph_amd64 xuiwpph_arm64
+          ls -lh xuiwpph_*
+
+      - name: Create release and upload assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="latest"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, uploading assets"
+          else
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "xui-pox auto build" \
+              --notes "Automated build. Assets: x-ui panel packages (amd64/arm64) and warp-plus binaries (amd64/arm64)." \
+              --latest
+          fi
+          gh release upload "$TAG" \
+            x-ui-linux-amd64.tar.gz x-ui-linux-arm64.tar.gz \
+            xuiwpph_amd64 xuiwpph_arm64 \
+            --repo "$GITHUB_REPOSITORY" --clobber
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY"

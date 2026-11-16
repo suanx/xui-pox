@@ -1,0 +1,42 @@
+name: Keep Servers Alive
+on:
+  workflow_dispatch:
+
+jobs:
+  keep_servers_alive:
+    runs-on: ubuntu-latest
+    env:
+      ACCOUNTS: >
+        [
+        { "SSH_USER":"用户名", "SSH_PASS":"密码", "HOST":"登录IP或者域名", "PORT":"端口"}
+        ]
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4.2.2
+
+      - name: Install required packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass jq
+
+      - name: Process each account
+        run: |
+             echo "*****************************************************"
+             echo "*****************************************************"
+             echo "xui-pox - VPS 服务器远程登录保活脚本"
+             echo "*****************************************************"
+             echo "*****************************************************"
+              count=0  
+             for account in $(echo "${ACCOUNTS}" | jq -c '.[]'); do
+              count=$((count+1))
+              SSH_USER=$(echo $account | jq -r '.SSH_USER')
+              SSH_PASS=$(echo $account | jq -r '.SSH_PASS')
+              HOST=$(echo $account | jq -r '.HOST')
+              PORT=$(echo $account | jq -r '.PORT')
+             if sshpass -p "$SSH_PASS" ssh -p "$PORT" -o StrictHostKeyChecking=no "$SSH_USER@$HOST" -q exit; then
+             echo "🎉恭喜！✅第【$count】台服务器连接成功！🚀服务器地址：$HOST ，账户名：$SSH_USER"
+             else
+             echo "💥杯具！❌第【$count】台服务器连接失败！🚀服务器地址：$HOST ，账户名：$SSH_USER"
+             fi
+             sleep 5
+             done
