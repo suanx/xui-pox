@@ -40,6 +40,83 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Patch panel source (Chinese-only, no sponsor/branding/updater)
+        run: |
+          set -e
+          # ---- A. Chinese-only UI ----
+          cd internal/web/translation
+          find . -maxdepth 1 -name '*.json' ! -name 'zh-CN.json' -delete
+          cd ../../..
+
+          python3 - <<'PYEOF'
+          import re
+          p = 'frontend/src/utils/index.ts'
+          s = open(p, encoding='utf-8').read()
+          s = re.sub(r"static readonly supportedLanguages: readonly SupportedLanguage\[\] = \[.*?\];",
+                     "static readonly supportedLanguages: readonly SupportedLanguage[] = [\n    { name: '简体中文', value: 'zh-CN', icon: '🇨🇳' },\n  ];", s, flags=re.S)
+          s = re.sub(r"const simularLangs: \[string, string\]\[\] = \[.*?\];",
+                     "const simularLangs: [string, string][] = [];", s, flags=re.S)
+          assert "value: 'zh-CN'" in s and "simularLangs: [string, string][] = [];" in s, "language list patch failed"
+          open(p, 'w', encoding='utf-8').write(s)
+          PYEOF
+
+          # ---- B. remove sponsors / branding / external links / in-panel updater ----
+          python3 - <<'PYEOF'
+          import re
+          for path, name, props in [
+            ('frontend/src/components/sponsor/SponsorSlot.tsx', 'SponsorSlot', 'SponsorSlotProps'),
+            ('frontend/src/components/sponsor/SponsorCard.tsx', 'SponsorCard', 'SponsorCardProps'),
+          ]:
+              s = open(path, encoding='utf-8').read()
+              m = re.search(r'export (?:interface|type) ' + props + r'.*?(?=\nexport default)', s, re.S)
+              keep = m.group(0) if m else ''
+              open(path, 'w', encoding='utf-8').write(
+                  '/* xui-pox: sponsor components disabled */\n' + keep +
+                  '\nexport default function ' + name + '(_props: ' + props + ') {\n  return null;\n}\n')
+          PYEOF
+
+          sed -i "/path: '\/sponsors'/d" frontend/src/routes/panelRoutes.tsx
+          sed -i "s|const DONATE_URL = .*|const DONATE_URL = '#';|; s|const DOCS_URL = .*|const DOCS_URL = '#';|; s|const REPO_URL = .*|const REPO_URL = '#';|" frontend/src/layouts/AppSidebar.tsx
+          sed -i "s|onClick={onOpenPanelUpdate}|onClick={() => {}}|; s|onClick={onOpenVersionSwitch}|onClick={() => {}}|" frontend/src/pages/index/OverviewActionBar.tsx
+          sed -i 's|<span className="brand-name">3X-UI</span>|<span className="brand-name">xui-pox</span>|' frontend/src/pages/login/LoginPage.tsx
+          sed -i "s|label: '3X-UI Panel API'|label: 'xui-pox Panel API'|" frontend/src/pages/api-docs/ApiDocsPage.tsx
+          sed -i "s|issuer: '3x-ui'|issuer: 'xui-pox'|" frontend/src/pages/settings/TwoFactorModal.tsx
+          sed -i 's|<span>3x-ui Command Palette</span>|<span>Command Palette</span>|' frontend/src/components/command-palette/CommandPalette.tsx
+          sed -i "s|3x-ui-outbound-sub/1.0|xui-pox-outbound-sub/1.0|" frontend/src/pages/xray/outbounds/OutboundsTab.tsx
+          sed -i 's|placeholder="3x-ui"|placeholder="xui-pox"|' frontend/src/pages/settings/EmailTab.tsx
+          sed -i 's|href="https://github.com/MHSanaei/3x-ui/blob/main/docs/custom-subscription-templates.md"|href="#"|; s|/etc/3x-ui/sub_templates|/etc/x-ui/sub_templates|g' frontend/src/pages/settings/SubscriptionGeneralTab.tsx
+          sed -i 's|<html lang="en">|<html lang="zh-CN">|' frontend/index.html
+          sed -i 's|<meta charset="UTF-8" />|<meta charset="UTF-8" />\n    <title>xui-pox</title>|' frontend/index.html
+          sed -i "s|{railCollapsed ? '3X' : '3X-UI'}|{railCollapsed ? 'xp' : 'xui-pox'}|" frontend/src/layouts/AppSidebar.tsx
+          sed -i "s|name: '3x-ui'|name: 'xui-pox'|; s|title: '3X-UI Panel API'|title: 'xui-pox Panel API'|; s|a 3X-UI panel|a xui-pox panel|" frontend/scripts/build-openapi.mjs
+
+          # catch-all: rebrand remaining occurrences in frontend sources
+          grep -rl "3X-UI\|3x-ui" frontend/src frontend/scripts --include='*.ts' --include='*.tsx' --include='*.mjs' | xargs -r sed -i 's|3X-UI|xui-pox|g; s|3x-ui|xui-pox|g'
+          grep -rl "MHSanaei" frontend/src frontend/scripts | xargs -r sed -i 's|github.com/MHSanaei/3x-ui|github.com/suanx/xui-pox|g; s|MHSanaei|suanx|g'
+
+          python3 - <<'PYEOF'
+          import json
+          p = 'internal/web/translation/zh-CN.json'
+          d = json.load(open(p, encoding='utf-8'))
+          d.get('menu', {}).pop('sponsors', None)
+          d.get('pages', {}).pop('sponsors', None)
+          def repl(o):
+              if isinstance(o, dict):
+                  for k, v in o.items(): o[k] = repl(v)
+                  return o
+              if isinstance(o, list):
+                  return [repl(v) for v in o]
+              if isinstance(o, str):
+                  return o.replace('3X-UI', 'xui-pox').replace('3x-ui', 'xui-pox')
+              return o
+          d = repl(d)
+          json.dump(d, open(p, 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+          PYEOF
+          cp internal/web/translation/zh-CN.json internal/web/translation/en-US.json
+          echo "patch done:"
+          ls internal/web/translation/
+          grep -c "MHSanaei" frontend/src -r || echo "no author refs left in frontend"
+
       - name: Build frontend bundle
         run: |
           npm ci
