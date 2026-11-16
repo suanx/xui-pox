@@ -70,7 +70,7 @@ hy2(Hysteria2,含端口跳跃)、vless(reality-vision / tcp-vision / ws / tcp)�
 
 ### WARP-plus-Socks5
 
-菜单 11 可启动本地 Socks5 代理(默认端口 40000),支持 32 个国家/地区的 Psiphon 出口,并可与 xray 出站(菜单内 `socks5-warp` 分流)联动。
+菜单 11 可启动本地 Socks5 代理(默认端口 40000),支持 31 个国家/地区的 Psiphon 出口,并可与 xray 出站(菜单内 `socks5-warp` 分流)联动。
 
 ## 升级 / 重装
 
