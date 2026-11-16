@@ -103,7 +103,13 @@ jobs:
           sed -i 's|MHSanaei/3x-ui#6535|xui-pox|' internal/util/totp/totp.go
           GOFILES=$(grep -rl "3x-ui" --include='*.go' . || true)
           [ -n "$GOFILES" ] && xargs -r sed -i 's|3x-ui-test-log|xui-pox-test-log|g; s|not a 3x-ui panel database|not a xui-pox panel database|g; s|3x-ui panel|xui-pox panel|g; s|3x-ui application|xui-pox application|g' <<< "$GOFILES" || true
-          echo "go-side rebrand done:" && grep -rn "mhsanaei" --include='*.go' . | head -5 || echo "no mhsanaei left in go sources"
+
+          # ---- D. full consistency: icons rename + Go-side catch-all ----
+          for f in frontend/public/icons/3x-ui-*.png; do [ -e "$f" ] && mv "$f" "${f/3x-ui/xui-pox}"; done
+          grep -rl "icons/3x-ui" internal frontend/src frontend/public frontend/scripts | xargs -r sed -i 's|icons/3x-ui-|icons/xui-pox-|g'
+          grep -rl "3x-ui" --include='*.go' internal/ *.go 2>/dev/null | xargs -r sed -i 's|3x-ui|xui-pox|g'
+          grep -rl "github.com/mhsanaei" --include='*.go' . | xargs -r sed -i 's|github.com/mhsanaei/3x-ui|https://github.com/suanx/xui-pox|g; s|github.com/mhsanaei|https://github.com/suanx|g'
+          echo "final rebrand check:" && (grep -rn "mhsanaei" --include='*.go' . | head -3 || echo "no mhsanaei left") && (grep -rn "3x-ui" --include='*.go' internal/ | head -3 || echo "no 3x-ui left in go")
 
           python3 - <<'PYEOF'
           import json
