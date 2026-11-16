@@ -94,6 +94,17 @@ jobs:
           grep -rl "3X-UI\|3x-ui" frontend/src frontend/scripts --include='*.ts' --include='*.tsx' --include='*.mjs' | xargs -r sed -i 's|3X-UI|xui-pox|g; s|3x-ui|xui-pox|g'
           grep -rl "MHSanaei" frontend/src frontend/scripts | xargs -r sed -i 's|github.com/MHSanaei/3x-ui|github.com/suanx/xui-pox|g; s|MHSanaei|suanx|g'
 
+          # ---- C. Go side: mechanical module rebrand + user-visible strings ----
+          grep -rl "github.com/mhsanaei/3x-ui/v3" --include='*.go' . | xargs -r sed -i 's|github.com/mhsanaei/3x-ui/v3|github.com/suanx/xui-pox/v3|g'
+          sed -i 's|^module github.com/mhsanaei/3x-ui/v3|module github.com/suanx/xui-pox/v3|' go.mod
+          sed -i 's|"https://raw.githubusercontent.com/MHSanaei/3x-ui/main/update.sh"|""|' internal/web/service/panel/panel.go
+          sed -i 's|https://api.github.com/repos/MHSanaei/3x-ui/releases|https://api.github.com/repos/suanx/xui-pox/releases|g' internal/web/service/panel/panel.go
+          sed -i 's|"https://raw.githubusercontent.com/MHSanaei/sponsors/refs/heads/main/3X/sponsors.json"|""|; s|"https://raw.githubusercontent.com/MHSanaei/sponsors/refs/heads/main/3X/logos/"|""|' internal/web/service/panel/sponsor.go
+          sed -i 's|MHSanaei/3x-ui#6535|xui-pox|' internal/util/totp/totp.go
+          GOFILES=$(grep -rl "3x-ui" --include='*.go' . || true)
+          [ -n "$GOFILES" ] && xargs -r sed -i 's|3x-ui-test-log|xui-pox-test-log|g; s|not a 3x-ui panel database|not a xui-pox panel database|g; s|3x-ui panel|xui-pox panel|g; s|3x-ui application|xui-pox application|g' <<< "$GOFILES" || true
+          echo "go-side rebrand done:" && grep -rn "mhsanaei" --include='*.go' . | head -5 || echo "no mhsanaei left in go sources"
+
           python3 - <<'PYEOF'
           import json
           p = 'internal/web/translation/zh-CN.json'
