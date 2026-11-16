@@ -80,15 +80,16 @@ hy2(Hysteria2,含端口跳跃)、vless(reality-vision / tcp-vision / ws / tcp)�
 bash <(curl -Ls https://raw.githubusercontent.com/suanx/xui-pox/main/install.sh)
 ```
 
-脚本检测到已安装会提示先卸载(菜单 2)再装。卸载前建议在面板"备份与恢复"下载 `x-ui-yg.db` 备份数据库。
+脚本检测到已安装会提示先卸载(菜单 2)再装。卸载前建议在面板"备份与恢复"下载 `x-ui.db` 备份数据库。
 
 ## 二进制打包(GitHub Actions)
 
-仓库内不含二进制。推送代码到 `main` 分支(或手动触发)时,工作流 [.github/workflows/release.yml](.github/workflows/release.yml) 会自动:
+仓库内不含二进制。推送代码到 `main` 分支(或手动触发)时,工作流 [.github/workflows/release.yml](.github/workflows/release.yml) 会自动从源码构建全部组件:
 
-1. 获取 x-ui 面板主程序包(amd64 / arm64)
-2. 获取 warp-plus 二进制(amd64 / arm64)并重命名为 `xuiwpph_*`
-3. 发布到本仓库 Release(tag `latest`),脚本通过 `releases/latest/download/...` 下载
+1. **面板**:检出开源 [3x-ui](https://github.com/MHSanaei/3x-ui) 源码,编译前端(Vite)与后端(Go,musl 静态链接),amd64 / arm64 双架构
+2. **内核**:获取官方 [Xray-core](https://github.com/XTLS/Xray-core) 二进制与 geo 分流规则数据
+3. **warp-plus**:获取开源 [warp-plus](https://github.com/bepass-org/warp-plus) 二进制,重命名为 `xuiwpph_*`
+4. 组装为与脚本对齐的 `x-ui-linux-{amd64,arm64}.tar.gz`(含自写的 `x-ui.service`),连同 `xuiwpph_*` 一并发布到本仓库 Release(tag `latest`)
 
 如 Release 资产缺失,在 GitHub 仓库 Actions 页面手动 Run workflow 即可重建。
 
@@ -106,6 +107,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/suanx/xui-pox/main/install.sh)
 
 ## 注意事项
 
-- 安装路径为 `/usr/local/x-ui`,快捷命令 `x-ui`,面板数据库在 `/etc/x-ui-yg/`
+- 安装路径为 `/usr/local/x-ui`,快捷命令 `x-ui`,面板数据库在 `/etc/x-ui/`
+- 面板基于开源项目 [3x-ui](https://github.com/MHSanaei/3x-ui)(GPL-3.0)从源码编译,内核为官方 [Xray-core](https://github.com/XTLS/Xray-core),均由本仓库工作流自动构建,不含任何第三方预编译面板
 - 面板首次登录后建议:更换随机生成的账号密码、启用 https、确认根路径非空
-- 已知保留的外部依赖(仅功能调用,无推广内容):面板主程序包与 warp-plus 上游、Acme 官方客户端、Cloudflare cloudflared / WARP API、DNS 与分流规则集
+- 已知的外部源码依赖(均为开源项目,由工作流从源码/官方 release 构建):[3x-ui](https://github.com/MHSanaei/3x-ui)、[Xray-core](https://github.com/XTLS/Xray-core)、[warp-plus](https://github.com/bepass-org/warp-plus)、Acme 官方客户端、Cloudflare cloudflared / WARP API、DNS 与分流规则数据

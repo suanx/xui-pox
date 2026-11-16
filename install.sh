@@ -189,7 +189,7 @@ systemctl daemon-reload
 systemctl reset-failed
 fi
 rm /usr/bin/x-ui -f
-rm /etc/x-ui-yg/ -rf
+rm /etc/x-ui/ -rf
 rm /usr/local/x-ui/ -rf
 rm -rf xuipox_update
 exit
@@ -340,8 +340,8 @@ resinstall
 
 uninstall() {
 yellow "本次卸载将清除所有数据，建议如下："
-yellow "一、点击x-ui面版中的备份与恢复，下载备份文件x-ui-yg.db"
-yellow "二、在 /etc/x-ui-yg 路径导出备份文件x-ui-yg.db"
+yellow "一、点击x-ui面版中的备份与恢复，下载备份文件x-ui.db"
+yellow "二、在 /etc/x-ui 路径导出备份文件x-ui.db"
 readp "确定卸载，请按回车(退出请按ctrl+c):" ins
 if [[ -z $ins ]]; then
 if [[ x"${release}" == x"alpine" ]]; then
@@ -359,7 +359,7 @@ kill -15 $(cat /usr/local/x-ui/xuiargopid.log 2>/dev/null) >/dev/null 2>&1
 kill -15 $(cat /usr/local/x-ui/xuiargoympid.log 2>/dev/null) >/dev/null 2>&1
 kill -15 $(cat /usr/local/x-ui/xuiwpphid.log 2>/dev/null) >/dev/null 2>&1
 kill -15 $(pgrep -f 'webxui' 2>/dev/null) >/dev/null 2>&1
-rm -rf /root/webxui /etc/local.d/alpinesub.start /usr/local/x-ui/ /etc/x-ui-yg/ /usr/bin/x-ui xuipox_update xuicaz
+rm -rf /root/webxui /etc/local.d/alpinesub.start /usr/local/x-ui/ /etc/x-ui/ /usr/bin/x-ui xuipox_update xuicaz
 iptables -t nat -F PREROUTING >/dev/null 2>&1
 ip6tables -t nat -F PREROUTING >/dev/null 2>&1
 netfilter-persistent save >/dev/null 2>&1
@@ -2695,11 +2695,11 @@ show_status
 echo "------------------------------------------------------------------------------------"
 acp=$(/usr/local/x-ui/x-ui setting -show 2>/dev/null)
 if [[ -n $acp ]]; then
-if [[ $acp == *admin*  ]]; then
+if [[ $acp == *hasDefaultCredential:*true* ]]; then
 red "x-ui出错，请选择4重置用户名密码或者卸载重装x-ui"
 else
-xpath=$(echo $acp | awk '{print $8}')
-xport=$(echo $acp | awk '{print $6}')
+xpath=$(echo "$acp" | awk '/^webBasePath:/{print $2}')
+xport=$(echo "$acp" | awk '/^port:/{print $2}')
 xip1=$(cat /usr/local/x-ui/xip 2>/dev/null | sed -n 1p)
 xip2=$(cat /usr/local/x-ui/xip 2>/dev/null | sed -n 2p)
 temp=$(systemctl is-active x-ui 2>/dev/null | grep -w active)
@@ -2720,7 +2720,7 @@ if [ "$xpath" == "/" ]; then
 pathk="$sred【严重安全提示: 请进入面板设置，添加url根路径】$plain"
 fi
 echo -e "x-ui登录信息如下："
-echo -e "$blue$acp$pathk$plain" 
+echo -e "$blue端口: $xport   根路径: $xpath$pathk$plain"
 if [[ -n $xip2 ]]; then
 xuimb="http://${xip1}:${xport}${xpath} 或者 http://${xip2}:${xport}${xpath}"
 else

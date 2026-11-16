@@ -8,20 +8,102 @@ on:
 permissions:
   contents: write
 
+env:
+  PANEL_REPO: MHSanaei/3x-ui
+  PANEL_REF: v3.11.0
+  XRAY_VER: v26.11.9
+
 jobs:
-  build:
+  panel:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [amd64, arm64]
     runs-on: ubuntu-latest
     steps:
-      - name: Fetch x-ui panel packages
-        run: |
-          curl -fsSL --retry 3 -o x-ui-linux-amd64.tar.gz https://github.com/yonggekkk/x-ui-yg/releases/download/xui_yg/x-ui-linux-amd64.tar.gz
-          curl -fsSL --retry 3 -o x-ui-linux-arm64.tar.gz https://github.com/yonggekkk/x-ui-yg/releases/download/xui_yg/x-ui-linux-arm64.tar.gz
-          ls -lh x-ui-linux-*.tar.gz
+      - name: Checkout panel source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.PANEL_REPO }}
+          ref: ${{ env.PANEL_REF }}
 
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend bundle
+        run: |
+          npm ci
+          npm run build
+        working-directory: frontend
+
+      - name: Build panel binary (musl static)
+        run: |
+          export CGO_ENABLED=1
+          export GOOS=linux
+          case "${{ matrix.platform }}" in
+            amd64) BOOTLIN_ARCH="x86-64";  export GOARCH=amd64 ;;
+            arm64) BOOTLIN_ARCH="aarch64"; export GOARCH=arm64 ;;
+          esac
+          TARBALL_BASE="https://toolchains.bootlin.com/downloads/releases/toolchains/${BOOTLIN_ARCH}/tarballs/"
+          TARBALL_URL=$(curl -fsSL --retry 5 "${TARBALL_BASE}" | grep -oE "${BOOTLIN_ARCH}--musl--stable-[^\"]+\.tar\.xz" | sort -r | head -n1)
+          [ -z "$TARBALL_URL" ] && { echo "Failed to locate musl toolchain" >&2; exit 1; }
+          cd /tmp
+          curl -fsSL --retry 5 -o tc.tar.xz "${TARBALL_BASE}/${TARBALL_URL}"
+          tar -xf tc.tar.xz
+          TOOLCHAIN_DIR=$(find /tmp -maxdepth 1 -type d -name "${BOOTLIN_ARCH}--musl--stable-*" | head -n1)
+          export PATH="$(realpath "$TOOLCHAIN_DIR")/bin:$PATH"
+          export CC=$(realpath "$(find "$TOOLCHAIN_DIR/bin" -name '*-gcc.br_real' -type f -executable | head -n1)")
+          [ -z "$CC" ] && { echo "No gcc.br_real found" >&2; exit 1; }
+          cd -
+          go build -buildvcs=true -ldflags "-w -s -linkmode external -extldflags '-static'" -o x-ui-bin -v .
+          file x-ui-bin
+
+      - name: Assemble package
+        run: |
+          mkdir -p x-ui/bin
+          cp x-ui-bin x-ui/x-ui
+          cp x-ui.service.debian x-ui/x-ui.service
+          chmod +x x-ui/x-ui
+          cd x-ui/bin
+          case "${{ matrix.platform }}" in
+            amd64) XRAY_ZIP="Xray-linux-64.zip" ;;
+            arm64) XRAY_ZIP="Xray-linux-arm64-v8a.zip" ;;
+          esac
+          curl -fsSL --retry 5 -o xray.zip "https://github.com/XTLS/Xray-core/releases/download/${XRAY_VER}/${XRAY_ZIP}"
+          unzip -o xray.zip
+          rm -f xray.zip
+          mv xray xray-linux-${{ matrix.platform }}
+          chmod +x xray-linux-${{ matrix.platform }}
+          rm -f geoip.dat geosite.dat
+          curl -fsSL --retry 5 -o geoip.dat  https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
+          curl -fsSL --retry 5 -o geosite.dat https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
+          cd ../..
+          tar -zcvf x-ui-linux-${{ matrix.platform }}.tar.gz x-ui
+          ls -lh x-ui-linux-${{ matrix.platform }}.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkg-${{ matrix.platform }}
+          path: x-ui-linux-${{ matrix.platform }}.tar.gz
+
+  warp:
+    runs-on: ubuntu-latest
+    steps:
       - name: Fetch warp-plus binaries
         run: |
-          curl -fsSL --retry 3 -o wp-amd64.zip https://github.com/bepass-org/warp-plus/releases/latest/download/warp-plus_linux-amd64.zip
-          curl -fsSL --retry 3 -o wp-arm64.zip https://github.com/bepass-org/warp-plus/releases/latest/download/warp-plus_linux-arm64.zip
+          curl -fsSL --retry 5 -o wp-amd64.zip https://github.com/bepass-org/warp-plus/releases/latest/download/warp-plus_linux-amd64.zip
+          curl -fsSL --retry 5 -o wp-arm64.zip https://github.com/bepass-org/warp-plus/releases/latest/download/warp-plus_linux-arm64.zip
           unzip -o wp-amd64.zip -d wp-amd64
           unzip -o wp-arm64.zip -d wp-arm64
           mv wp-amd64/warp-plus xuiwpph_amd64
@@ -29,10 +111,29 @@ jobs:
           chmod +x xuiwpph_amd64 xuiwpph_arm64
           ls -lh xuiwpph_*
 
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkg-warp
+          path: xuiwpph_*
+
+  release:
+    needs: [panel, warp]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: pkg-*
+          merge-multiple: true
+
       - name: Create release and upload assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          cd dist
+          ls -lh
           TAG="latest"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             echo "Release $TAG already exists, uploading assets"
@@ -40,7 +141,7 @@ jobs:
             gh release create "$TAG" \
               --repo "$GITHUB_REPOSITORY" \
               --title "xui-pox auto build" \
-              --notes "Automated build. Assets: x-ui panel packages (amd64/arm64) and warp-plus binaries (amd64/arm64)." \
+              --notes "Automated build from source. Assets: 3x-ui panel packages compiled from source (amd64/arm64) with official Xray-core, and warp-plus binaries (amd64/arm64)." \
               --latest
           fi
           gh release upload "$TAG" \
