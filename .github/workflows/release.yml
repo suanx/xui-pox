@@ -93,6 +93,7 @@ jobs:
           # catch-all: rebrand remaining occurrences in frontend sources
           grep -rl "3X-UI\|3x-ui" frontend/src frontend/scripts --include='*.ts' --include='*.tsx' --include='*.mjs' | xargs -r sed -i 's|3X-UI|xui-pox|g; s|3x-ui|xui-pox|g'
           grep -rl "MHSanaei" frontend/src frontend/scripts | xargs -r sed -i 's|github.com/MHSanaei/3x-ui|github.com/suanx/xui-pox|g; s|MHSanaei|suanx|g'
+          sed -i 's|3X-UI|xui-pox|g; s|3x-ui|xui-pox|g' frontend/public/manifest.webmanifest
 
           # ---- C. Go side: mechanical module rebrand + user-visible strings ----
           grep -rl "github.com/mhsanaei/3x-ui/v3" --include='*.go' . | xargs -r sed -i 's|github.com/mhsanaei/3x-ui/v3|github.com/suanx/xui-pox/v3|g'
